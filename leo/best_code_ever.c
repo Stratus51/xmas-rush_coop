@@ -45,12 +45,20 @@ int main()
 		int numItems; // the total number of items available on board and on player tiles
 		scanf("%d", &numItems);
 
+		int playerItemX;
+		int playerItemY;
+
 		for (int i = 0; i < numItems; i++) {
 			char itemName[11];
 			int itemX;
 			int itemY;
 			int itemPlayerId;
 			scanf("%s%d%d%d", itemName, &itemX, &itemY, &itemPlayerId);
+
+			if (itemPlayerId == 0) {
+				playerItemX = itemX;
+				playerItemY = itemY;
+			}
 		}
 
 		int numQuests; // the total number of revealed quests for both players
@@ -77,30 +85,63 @@ int main()
 			int moveList[20];
 
 			//while (continueToMove == 1 && moveNumber < 20) {
-				if (tiles[playerX][playerY][UP] == 1
-				    && playerY > 0
-				    && tiles[playerX][playerY - 1][DOWN] == 1) {
-					moveList[moveNumber] = UP;
-					moveNumber++;
-				}
-				else if (tiles[playerX][playerY][RIGHT] == 1
-				         && playerX < 6
-				         && tiles[playerX + 1][playerY][LEFT] == 1) {
+				int moveDirectionX = playerX - playerItemX;
+				int moveDirectionY = playerY - playerItemY;
+
+				fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
+
+				if (moveDirectionX < 0 // Go right
+				    && tiles[playerX][playerY][RIGHT] == 1
+				    && playerX < 6
+				    && tiles[playerX + 1][playerY][LEFT] == 1) {
 					moveList[moveNumber] = RIGHT;
 					moveNumber++;
 				}
-				else if (tiles[playerX][playerY][DOWN] == 1
-				         && playerY < 6
-				         && tiles[playerX][playerY + 1][UP] == 1) {
-					moveList[moveNumber] = DOWN;
-					moveNumber++;
-				}
-				else if (tiles[playerX][playerY][LEFT] == 1
+				else if (moveDirectionX > 0 // Go left
+				         && tiles[playerX][playerY][LEFT] == 1
 				         && playerX > 0
 				         && tiles[playerX - 1][playerY][RIGHT] == 1) {
 					moveList[moveNumber] = LEFT;
 					moveNumber++;
 				}
+				else if (moveDirectionY < 0 // Go down
+				         && tiles[playerX][playerY][DOWN] == 1
+				         && playerY < 6
+				         && tiles[playerX][playerY + 1][UP] == 1) {
+					moveList[moveNumber] = DOWN;
+					moveNumber++;
+				}
+				else if (moveDirectionY > 0 // Go up
+				         && tiles[playerX][playerY][UP] == 1
+				         && playerY > 0
+				         && tiles[playerX][playerY - 1][DOWN] == 1) {
+					moveList[moveNumber] = UP;
+					moveNumber++;
+				}
+				//if (tiles[playerX][playerY][UP] == 1
+				//    && playerY > 0
+				//    && tiles[playerX][playerY - 1][DOWN] == 1) {
+				//	moveList[moveNumber] = UP;
+				//	moveNumber++;
+				//}
+				//else if (tiles[playerX][playerY][RIGHT] == 1
+				//         && playerX < 6
+				//         && tiles[playerX + 1][playerY][LEFT] == 1) {
+				//	moveList[moveNumber] = RIGHT;
+				//	moveNumber++;
+				//}
+				//else if (tiles[playerX][playerY][DOWN] == 1
+				//         && playerY < 6
+				//         && tiles[playerX][playerY + 1][UP] == 1) {
+				//	moveList[moveNumber] = DOWN;
+				//	moveNumber++;
+				//}
+				//else if (tiles[playerX][playerY][LEFT] == 1
+				//         && playerX > 0
+				//         && tiles[playerX - 1][playerY][RIGHT] == 1) {
+				//	moveList[moveNumber] = LEFT;
+				//	moveNumber++;
+				//}
 				else {
 					continueToMove = 0;
 				}
