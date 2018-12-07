@@ -74,20 +74,20 @@ int main()
 		// To debug: fprintf(stderr, "Debug messages...\n");
 
 		if (turnType == 0) {
-			printf("PUSH 3 RIGHT\n");
+			printf("PUSH 6 RIGHT\n");
 		} else {
-			fprintf(stderr, "PX: %d, PY: %d\n", playerX, playerY);
-			fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY][UP], tiles[playerX][playerY][RIGHT], tiles[playerX][playerY][DOWN], tiles[playerX][playerY][LEFT]);
-			fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY - 1][DOWN], tiles[playerX + 1][playerY][LEFT], tiles[playerX][playerY + 1][UP], tiles[playerX - 1][playerY][RIGHT]);
 
 			int continueToMove = 1;
 			int moveNumber = 0;
 			int moveList[20];
 
-			//while (continueToMove == 1 && moveNumber < 20) {
+			while (continueToMove == 1 && moveNumber < 20) {
 				int moveDirectionX = playerX - playerItemX;
 				int moveDirectionY = playerY - playerItemY;
 
+				fprintf(stderr, "PX: %d, PY: %d\n", playerX, playerY);
+				fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY][UP], tiles[playerX][playerY][RIGHT], tiles[playerX][playerY][DOWN], tiles[playerX][playerY][LEFT]);
+				fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY - 1][DOWN], tiles[playerX + 1][playerY][LEFT], tiles[playerX][playerY + 1][UP], tiles[playerX - 1][playerY][RIGHT]);
 				fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
 
 				if (moveDirectionX < 0 // Go right
@@ -96,6 +96,8 @@ int main()
 				    && tiles[playerX + 1][playerY][LEFT] == 1) {
 					moveList[moveNumber] = RIGHT;
 					moveNumber++;
+
+					playerX++;
 				}
 				else if (moveDirectionX > 0 // Go left
 				         && tiles[playerX][playerY][LEFT] == 1
@@ -103,6 +105,8 @@ int main()
 				         && tiles[playerX - 1][playerY][RIGHT] == 1) {
 					moveList[moveNumber] = LEFT;
 					moveNumber++;
+
+					playerX--;
 				}
 				else if (moveDirectionY < 0 // Go down
 				         && tiles[playerX][playerY][DOWN] == 1
@@ -110,6 +114,8 @@ int main()
 				         && tiles[playerX][playerY + 1][UP] == 1) {
 					moveList[moveNumber] = DOWN;
 					moveNumber++;
+
+					playerY++;
 				}
 				else if (moveDirectionY > 0 // Go up
 				         && tiles[playerX][playerY][UP] == 1
@@ -117,6 +123,8 @@ int main()
 				         && tiles[playerX][playerY - 1][DOWN] == 1) {
 					moveList[moveNumber] = UP;
 					moveNumber++;
+
+					playerY--;
 				}
 				//if (tiles[playerX][playerY][UP] == 1
 				//    && playerY > 0
@@ -145,7 +153,7 @@ int main()
 				else {
 					continueToMove = 0;
 				}
-			//}
+			}
 
 			if (moveNumber > 0) {
 				printf("MOVE");
