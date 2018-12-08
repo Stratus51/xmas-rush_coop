@@ -7,13 +7,28 @@
 #define DOWN  2
 #define LEFT  3
 
+#define ID        0
+#define DIRECTION 1
+
+int tiles[7][7][4];
+
+int playerX;
+int playerY;
+
+int canGoUp(void);
+int canGoRight(void);
+int canGoDown(void);
+int canGoLeft(void);
+
 int main()
 {
+	int isLastPass = 0;
+	int lastPush[2];
+
 	while (1) {
 		int turnType;
 		scanf("%d", &turnType);
 
-		int tiles[7][7][4];
 		for (int r = 0; r < 7; r++) {
 			for (int c = 0; c < 7; c++) {
 				char tile[5];
@@ -26,8 +41,6 @@ int main()
 		}
 
 		int numPlayerCards; // the total number of quests for a player (hidden and revealed)
-		int playerX;
-		int playerY;
 		char playerTileChar[5];
 		scanf("%d%d%d%s", &numPlayerCards, &playerX, &playerY, playerTileChar);
 
@@ -74,14 +87,79 @@ int main()
 		// To debug: fprintf(stderr, "Debug messages...\n");
 
 		if (turnType == 0) {
-			printf("PUSH 6 RIGHT\n");
-		} else {
+			if (isLastPass) {
+				// Retry last push
+				switch (lastPush[DIRECTION]) {
+					case UP   : printf("PUSH %d UP\n", lastPush[ID]); break;
+					case RIGHT: printf("PUSH %d RIGHT\n", lastPush[ID]); break;
+					case DOWN : printf("PUSH %d DOWN\n", lastPush[ID]); break;
+					case LEFT : printf("PUSH %d LEFT\n", lastPush[ID]); break;
+				}
+			}
+			else {
+				int moveDirectionX = playerX - playerItemX;
+				int moveDirectionY = playerY - playerItemY;
 
-			int continueToMove = 1;
+				fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
+
+				if (moveDirectionY == 0) {
+					if (playerY > 3) {
+						printf("PUSH %d UP\n", playerX);
+						lastPush[ID] = playerX;
+						lastPush[DIRECTION] = UP;
+					}
+					else {
+						printf("PUSH %d DOWN\n", playerX);
+						lastPush[ID] = playerX;
+						lastPush[DIRECTION] = DOWN;
+					}
+				}
+				else if (moveDirectionX == 0){
+					if (playerX > 3) {
+						printf("PUSH %d LEFT\n", playerY);
+						lastPush[ID] = playerY;
+						lastPush[DIRECTION] = LEFT;
+					}
+					else {
+						printf("PUSH %d RIGHT\n", playerY);
+						lastPush[ID] = playerY;
+						lastPush[DIRECTION] = RIGHT;
+					}
+				}
+				else {
+					if (moveDirectionX >= moveDirectionY) {
+						if (moveDirectionX < 0) {
+							printf("PUSH %d RIGHT\n", playerY);
+							lastPush[ID] = playerY;
+							lastPush[DIRECTION] = RIGHT;
+						}
+						else {
+							printf("PUSH %d LEFT\n", playerY);
+							lastPush[ID] = playerY;
+							lastPush[DIRECTION] = LEFT;
+						}
+					}
+					else {
+						if (moveDirectionY < 0) {
+							printf("PUSH %d DOWN\n", playerX);
+							lastPush[ID] = playerX;
+							lastPush[DIRECTION] = DOWN;
+						}
+						else {
+							printf("PUSH %d UP\n", playerX);
+							lastPush[ID] = playerX;
+							lastPush[DIRECTION] = UP;
+						}
+					}
+				}
+			}
+		}
+		else {
 			int moveNumber = 0;
 			int moveList[20];
+			int continueToMove = 1;
 
-			while (continueToMove == 1 && moveNumber < 20) {
+			while (continueToMove && moveNumber < 20) {
 				int moveDirectionX = playerX - playerItemX;
 				int moveDirectionY = playerY - playerItemY;
 
@@ -89,69 +167,73 @@ int main()
 				fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY][UP], tiles[playerX][playerY][RIGHT], tiles[playerX][playerY][DOWN], tiles[playerX][playerY][LEFT]);
 				fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY - 1][DOWN], tiles[playerX + 1][playerY][LEFT], tiles[playerX][playerY + 1][UP], tiles[playerX - 1][playerY][RIGHT]);
 				fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
+				fprintf(stderr, "Can go UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", canGoUp(), canGoRight(), canGoDown(), canGoLeft());
 
-				if (moveDirectionX < 0 // Go right
-				    && tiles[playerX][playerY][RIGHT] == 1
-				    && playerX < 6
-				    && tiles[playerX + 1][playerY][LEFT] == 1) {
+				if (moveDirectionX < 0 && canGoRight()) {
 					moveList[moveNumber] = RIGHT;
 					moveNumber++;
 
 					playerX++;
 				}
-				else if (moveDirectionX > 0 // Go left
-				         && tiles[playerX][playerY][LEFT] == 1
-				         && playerX > 0
-				         && tiles[playerX - 1][playerY][RIGHT] == 1) {
+				else if (moveDirectionX > 0 && canGoLeft()) {
 					moveList[moveNumber] = LEFT;
 					moveNumber++;
 
 					playerX--;
 				}
-				else if (moveDirectionY < 0 // Go down
-				         && tiles[playerX][playerY][DOWN] == 1
-				         && playerY < 6
-				         && tiles[playerX][playerY + 1][UP] == 1) {
+				else if (moveDirectionY < 0 && canGoDown()) {
 					moveList[moveNumber] = DOWN;
 					moveNumber++;
 
 					playerY++;
 				}
-				else if (moveDirectionY > 0 // Go up
-				         && tiles[playerX][playerY][UP] == 1
-				         && playerY > 0
-				         && tiles[playerX][playerY - 1][DOWN] == 1) {
+				else if (moveDirectionY > 0 && canGoUp()) {
 					moveList[moveNumber] = UP;
 					moveNumber++;
 
 					playerY--;
 				}
-				//if (tiles[playerX][playerY][UP] == 1
-				//    && playerY > 0
-				//    && tiles[playerX][playerY - 1][DOWN] == 1) {
-				//	moveList[moveNumber] = UP;
-				//	moveNumber++;
-				//}
-				//else if (tiles[playerX][playerY][RIGHT] == 1
-				//         && playerX < 6
-				//         && tiles[playerX + 1][playerY][LEFT] == 1) {
-				//	moveList[moveNumber] = RIGHT;
-				//	moveNumber++;
-				//}
-				//else if (tiles[playerX][playerY][DOWN] == 1
-				//         && playerY < 6
-				//         && tiles[playerX][playerY + 1][UP] == 1) {
-				//	moveList[moveNumber] = DOWN;
-				//	moveNumber++;
-				//}
-				//else if (tiles[playerX][playerY][LEFT] == 1
-				//         && playerX > 0
-				//         && tiles[playerX - 1][playerY][RIGHT] == 1) {
-				//	moveList[moveNumber] = LEFT;
-				//	moveNumber++;
-				//}
 				else {
 					continueToMove = 0;
+				}
+			}
+
+			if (moveNumber == 0) {
+				continueToMove = 1;
+
+				while (continueToMove && moveNumber < 20) {
+					int lastMove;
+					if (canGoRight() && lastMove != LEFT) {
+						moveList[moveNumber] = RIGHT;
+						moveNumber++;
+						lastMove = RIGHT;
+
+						playerX++;
+					}
+					else if (canGoLeft() && lastMove != RIGHT) {
+						moveList[moveNumber] = LEFT;
+						moveNumber++;
+						lastMove = LEFT;
+
+						playerX--;
+					}
+					else if (canGoDown() && lastMove != UP) {
+						moveList[moveNumber] = DOWN;
+						moveNumber++;
+						lastMove = DOWN;
+
+						playerY++;
+					}
+					else if (canGoUp() && lastMove != DOWN) {
+						moveList[moveNumber] = UP;
+						moveNumber++;
+						lastMove = UP;
+
+						playerY--;
+					}
+					else {
+						continueToMove = 0;
+					}
 				}
 			}
 
@@ -168,12 +250,64 @@ int main()
 				}
 
 				printf("\n");
+
+				isLastPass = 0;
 			}
 			else {
 				printf("PASS\n");
+
+				isLastPass = 1;
 			}
 		}
 	}
 
 	return 0;
+}
+
+int canGoUp(void)
+{
+	if (tiles[playerX][playerY][UP]
+	    && playerY > 0
+	    && tiles[playerX][playerY - 1][DOWN]) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+int canGoRight(void)
+{
+	if (tiles[playerX][playerY][RIGHT]
+	    && playerX < 6
+	    && tiles[playerX + 1][playerY][LEFT]) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+int canGoDown(void)
+{
+	if (tiles[playerX][playerY][DOWN]
+	    && playerY < 6
+	    && tiles[playerX][playerY + 1][UP]) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+int canGoLeft(void)
+{
+	if (tiles[playerX][playerY][LEFT]
+	    && playerX > 0
+	    && tiles[playerX - 1][playerY][RIGHT]) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
 }
