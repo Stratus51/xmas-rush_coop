@@ -5,6 +5,9 @@
 /***************************************************************************************************
  * Defines
  **************************************************************************************************/
+#define MAX_ITEMS  12
+#define MAX_QUESTS 3
+
 #define UP    0
 #define RIGHT 1
 #define DOWN  2
@@ -18,35 +21,51 @@
  **************************************************************************************************/
 typedef struct
 {
+	int x;
+	int y;
+} Position;
+
+typedef struct
+{
+	char name[11];
+	int x;
+	int y;
+} Item;
+
+typedef struct
+{
+	char name[11];
+} Quest;
+
+typedef struct
+{
 	int type;
+	int tiles[7][7][4];
+	Position playerPosition;
+	int numItems;
+	Item items[MAX_ITEMS];
+	int numQuests;
+	Quest quests[MAX_QUESTS];
 } Turn;
 
 /***************************************************************************************************
  * Global variables
  **************************************************************************************************/
-int tiles[7][7][4];
-
-int playerX;
-int playerY;
-
 int isLastMoveTurnPass = 0;
 int lastPush[2];
-
-int playerItemX;
-int playerItemY;
 
 /***************************************************************************************************
  * Functions
  **************************************************************************************************/
 Turn parseInput(void);
 
-void pushTurn(void);
-void moveTurn(void);
+void pushTurn(Turn turn);
+void moveTurn(Turn turn);
 
-int canGoUp(void);
-int canGoRight(void);
-int canGoDown(void);
-int canGoLeft(void);
+int canGoUp(Turn turn);
+int canGoRight(Turn turn);
+int canGoDown(Turn turn);
+int canGoLeft(Turn turn);
 
 /***************************************************************************************************
  * Main
@@ -60,16 +79,19 @@ int main()
 		// To debug: fprintf(stderr, "Debug messages...\n");
 
 		if (turn.type == 0) {
-			pushTurn();
+			pushTurn(turn);
 		}
 		else {
-			moveTurn();
+			moveTurn(turn);
 		}
 	}
 
 	return 0;
 }
 
+/***************************************************************************************************
+ * parseInput
+ **************************************************************************************************/
 Turn parseInput(void)
 {
 	Turn turn;
@@ -82,14 +104,14 @@ Turn parseInput(void)
 			scanf("%s", tile);
 
 			for (int i = 0; i < 4; i++) {
-				tiles[c][r][i] = (int)(tile[i]) - 48;
+				turn.tiles[c][r][i] = (int)(tile[i]) - 48;
 			}
 		}
 	}
 
 	int numPlayerCards; // the total number of quests for a player (hidden and revealed)
 	char playerTileChar[5];
-	scanf("%d%d%d%s", &numPlayerCards, &playerX, &playerY, playerTileChar);
+	scanf("%d%d%d%s", &numPlayerCards, &turn.playerPosition.x, &turn.playerPosition.y, playerTileChar);
 
 	int playerTile[4];
 	for (int i = 0; i < 4; i++) {
@@ -105,6 +127,7 @@ Turn parseInput(void)
 	int numItems; // the total number of items available on board and on player tiles
 	scanf("%d", &numItems);
 
+	turn.numItems = 0;
 	for (int i = 0; i < numItems; i++) {
 		char itemName[11];
 		int itemX;
@@ -113,24 +136,37 @@ Turn parseInput(void)
 		scanf("%s%d%d%d", itemName, &itemX, &itemY, &itemPlayerId);
 
 		if (itemPlayerId == 0) {
-			playerItemX = itemX;
-			playerItemY = itemY;
+			// Only record player items for now
+			strncpy(turn.items[turn.numItems].name, itemName, 11);
+			turn.items[turn.numItems].x = itemX;
+			turn.items[turn.numItems].y = itemY;
+			turn.numItems++;
 		}
 	}
 
 	int numQuests; // the total number of revealed quests for both players
 	scanf("%d", &numQuests);
 
+	turn.numQuests = 0;
 	for (int i = 0; i < numQuests; i++) {
 		char questItemName[11];
 		int questPlayerId;
 		scanf("%s%d", questItemName, &questPlayerId);
+
+		if (questPlayerId == 0) {
+			// Only record player quests for now
+			strncpy(turn.quests[turn.numQuests].name, questItemName, 11);
+			turn.numQuests++;
+		}
 	}
 
 	return turn;
 }
 
-void pushTurn(void)
+/***************************************************************************************************
+ * pushTurn
+ **************************************************************************************************/
+void pushTurn(Turn turn)
 {
 	if (isLastMoveTurnPass) {
 		// Retry last push
@@ -142,57 +178,66 @@ void pushTurn(void)
 		}
 	}
 	else {
-		int moveDirectionX = playerX - playerItemX;
-		int moveDirectionY = playerY - playerItemY;
+		// Select the item we want to reach
+		int currentItem = 0;
+		for (int i = 0; i < turn.numItems; i++) {
+			if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
+				currentItem = i;
+				break;
+			}
+		}
+
+		int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
+		int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
 
 		fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
 
 		if (moveDirectionY == 0) {
-			if (playerY > 3) {
-				printf("PUSH %d UP\n", playerX);
-				lastPush[ID] = playerX;
+			if (turn.playerPosition.y > 3) {
+				printf("PUSH %d UP\n", turn.playerPosition.x);
+				lastPush[ID] = turn.playerPosition.x;
 				lastPush[DIRECTION] = UP;
 			}
 			else {
-				printf("PUSH %d DOWN\n", playerX);
-				lastPush[ID] = playerX;
+				printf("PUSH %d DOWN\n", turn.playerPosition.x);
+				lastPush[ID] = turn.playerPosition.x;
 				lastPush[DIRECTION] = DOWN;
 			}
 		}
 		else if (moveDirectionX == 0){
-			if (playerX > 3) {
-				printf("PUSH %d LEFT\n", playerY);
-				lastPush[ID] = playerY;
+			if (turn.playerPosition.x > 3) {
+				printf("PUSH %d LEFT\n", turn.playerPosition.y);
+				lastPush[ID] = turn.playerPosition.y;
 				lastPush[DIRECTION] = LEFT;
 			}
 			else {
-				printf("PUSH %d RIGHT\n", playerY);
-				lastPush[ID] = playerY;
+				printf("PUSH %d RIGHT\n", turn.playerPosition.y);
+				lastPush[ID] = turn.playerPosition.y;
 				lastPush[DIRECTION] = RIGHT;
 			}
 		}
 		else {
 			if (moveDirectionX >= moveDirectionY) {
 				if (moveDirectionX < 0) {
-					printf("PUSH %d RIGHT\n", playerY);
-					lastPush[ID] = playerY;
+					printf("PUSH %d RIGHT\n", turn.playerPosition.y);
+					lastPush[ID] = turn.playerPosition.y;
 					lastPush[DIRECTION] = RIGHT;
 				}
 				else {
-					printf("PUSH %d LEFT\n", playerY);
-					lastPush[ID] = playerY;
+					printf("PUSH %d LEFT\n", turn.playerPosition.y);
+					lastPush[ID] = turn.playerPosition.y;
 					lastPush[DIRECTION] = LEFT;
 				}
 			}
 			else {
 				if (moveDirectionY < 0) {
-					printf("PUSH %d DOWN\n", playerX);
-					lastPush[ID] = playerX;
+					printf("PUSH %d DOWN\n", turn.playerPosition.x);
+					lastPush[ID] = turn.playerPosition.x;
 					lastPush[DIRECTION] = DOWN;
 				}
 				else {
-					printf("PUSH %d UP\n", playerX);
-					lastPush[ID] = playerX;
+					printf("PUSH %d UP\n", turn.playerPosition.x);
+					lastPush[ID] = turn.playerPosition.x;
 					lastPush[DIRECTION] = UP;
 				}
 			}
@@ -200,45 +245,66 @@ void pushTurn(void)
 	}
 }
 
-void moveTurn(void)
+/***************************************************************************************************
+ * moveTurn
+ **************************************************************************************************/
+void moveTurn(Turn turn)
 {
+	for (int i = 0; i < turn.numQuests; i++) {
+		fprintf(stderr, "Quest: %s\n", turn.quests[i].name);
+	}
+	for (int i = 0; i < turn.numItems; i++) {
+		fprintf(stderr, "Item: %s\n", turn.items[i].name);
+	}
+
+	// Select the item we want to reach
+	int currentItem = 0;
+	for (int i = 0; i < turn.numItems; i++) {
+		if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
+			currentItem = i;
+			break;
+		}
+	}
+	fprintf(stderr, "Selected item: %s\n", turn.items[currentItem].name);
+
+	// Try to go to the selected item
 	int moveNumber = 0;
 	int moveList[20];
 	int continueToMove = 1;
 
 	while (continueToMove && moveNumber < 20) {
-		int moveDirectionX = playerX - playerItemX;
-		int moveDirectionY = playerY - playerItemY;
+		int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
+		int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
 
-		fprintf(stderr, "PX: %d, PY: %d\n", playerX, playerY);
-		fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY][UP], tiles[playerX][playerY][RIGHT], tiles[playerX][playerY][DOWN], tiles[playerX][playerY][LEFT]);
-		fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", tiles[playerX][playerY - 1][DOWN], tiles[playerX + 1][playerY][LEFT], tiles[playerX][playerY + 1][UP], tiles[playerX - 1][playerY][RIGHT]);
+		fprintf(stderr, "PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
+		fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", turn.tiles[turn.playerPosition.x][turn.playerPosition.y][UP], turn.tiles[turn.playerPosition.x][turn.playerPosition.y][RIGHT], turn.tiles[turn.playerPosition.x][turn.playerPosition.y][DOWN], turn.tiles[turn.playerPosition.x][turn.playerPosition.y][LEFT]);
+		fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", turn.tiles[turn.playerPosition.x][turn.playerPosition.y - 1][DOWN], turn.tiles[turn.playerPosition.x + 1][turn.playerPosition.y][LEFT], turn.tiles[turn.playerPosition.x][turn.playerPosition.y + 1][UP], turn.tiles[turn.playerPosition.x - 1][turn.playerPosition.y][RIGHT]);
 		fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
-		fprintf(stderr, "Can go UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", canGoUp(), canGoRight(), canGoDown(), canGoLeft());
+		fprintf(stderr, "Can go UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", canGoUp(turn), canGoRight(turn), canGoDown(turn), canGoLeft(turn));
 
-		if (moveDirectionX < 0 && canGoRight()) {
+		if (moveDirectionX < 0 && canGoRight(turn)) {
 			moveList[moveNumber] = RIGHT;
 			moveNumber++;
 
-			playerX++;
+			turn.playerPosition.x++;
 		}
-		else if (moveDirectionX > 0 && canGoLeft()) {
+		else if (moveDirectionX > 0 && canGoLeft(turn)) {
 			moveList[moveNumber] = LEFT;
 			moveNumber++;
 
-			playerX--;
+			turn.playerPosition.x--;
 		}
-		else if (moveDirectionY < 0 && canGoDown()) {
+		else if (moveDirectionY < 0 && canGoDown(turn)) {
 			moveList[moveNumber] = DOWN;
 			moveNumber++;
 
-			playerY++;
+			turn.playerPosition.y++;
 		}
-		else if (moveDirectionY > 0 && canGoUp()) {
+		else if (moveDirectionY > 0 && canGoUp(turn)) {
 			moveList[moveNumber] = UP;
 			moveNumber++;
 
-			playerY--;
+			turn.playerPosition.y--;
 		}
 		else {
 			continueToMove = 0;
@@ -250,33 +316,33 @@ void moveTurn(void)
 
 		while (continueToMove && moveNumber < 20) {
 			int lastMove;
-			if (canGoRight() && lastMove != LEFT) {
+			if (canGoRight(turn) && lastMove != LEFT) {
 				moveList[moveNumber] = RIGHT;
 				moveNumber++;
 				lastMove = RIGHT;
 
-				playerX++;
+				turn.playerPosition.x++;
 			}
-			else if (canGoLeft() && lastMove != RIGHT) {
+			else if (canGoLeft(turn) && lastMove != RIGHT) {
 				moveList[moveNumber] = LEFT;
 				moveNumber++;
 				lastMove = LEFT;
 
-				playerX--;
+				turn.playerPosition.x--;
 			}
-			else if (canGoDown() && lastMove != UP) {
+			else if (canGoDown(turn) && lastMove != UP) {
 				moveList[moveNumber] = DOWN;
 				moveNumber++;
 				lastMove = DOWN;
 
-				playerY++;
+				turn.playerPosition.y++;
 			}
-			else if (canGoUp() && lastMove != DOWN) {
+			else if (canGoUp(turn) && lastMove != DOWN) {
 				moveList[moveNumber] = UP;
 				moveNumber++;
 				lastMove = UP;
 
-				playerY--;
+				turn.playerPosition.y--;
 			}
 			else {
 				continueToMove = 0;
@@ -307,11 +373,14 @@ void moveTurn(void)
 	}
 }
 
-int canGoUp(void)
+/***************************************************************************************************
+ * canGoUp
+ **************************************************************************************************/
+int canGoUp(Turn turn)
 {
-	if (tiles[playerX][playerY][UP]
-	    && playerY > 0
-	    && tiles[playerX][playerY - 1][DOWN]) {
+	if (turn.tiles[turn.playerPosition.x][turn.playerPosition.y][UP]
+	    && turn.playerPosition.y > 0
+	    && turn.tiles[turn.playerPosition.x][turn.playerPosition.y - 1][DOWN]) {
 		return 1;
 	}
 	else {
@@ -319,11 +388,14 @@ int canGoUp(void)
 	}
 }
 
-int canGoRight(void)
+/***************************************************************************************************
+ * canGoRight
+ **************************************************************************************************/
+int canGoRight(Turn turn)
 {
-	if (tiles[playerX][playerY][RIGHT]
-	    && playerX < 6
-	    && tiles[playerX + 1][playerY][LEFT]) {
+	if (turn.tiles[turn.playerPosition.x][turn.playerPosition.y][RIGHT]
+	    && turn.playerPosition.x < 6
+	    && turn.tiles[turn.playerPosition.x + 1][turn.playerPosition.y][LEFT]) {
 		return 1;
 	}
 	else {
@@ -331,11 +403,14 @@ int canGoRight(void)
 	}
 }
 
-int canGoDown(void)
+/***************************************************************************************************
+ * canGoDown
+ **************************************************************************************************/
+int canGoDown(Turn turn)
 {
-	if (tiles[playerX][playerY][DOWN]
-	    && playerY < 6
-	    && tiles[playerX][playerY + 1][UP]) {
+	if (turn.tiles[turn.playerPosition.x][turn.playerPosition.y][DOWN]
+	    && turn.playerPosition.y < 6
+	    && turn.tiles[turn.playerPosition.x][turn.playerPosition.y + 1][UP]) {
 		return 1;
 	}
 	else {
@@ -343,11 +418,14 @@ int canGoDown(void)
 	}
 }
 
-int canGoLeft(void)
+/***************************************************************************************************
+ * canGoLeft
+ **************************************************************************************************/
+int canGoLeft(Turn turn)
 {
-	if (tiles[playerX][playerY][LEFT]
-	    && playerX > 0
-	    && tiles[playerX - 1][playerY][RIGHT]) {
+	if (turn.tiles[turn.playerPosition.x][turn.playerPosition.y][LEFT]
+	    && turn.playerPosition.x > 0
+	    && turn.tiles[turn.playerPosition.x - 1][turn.playerPosition.y][RIGHT]) {
 		return 1;
 	}
 	else {
