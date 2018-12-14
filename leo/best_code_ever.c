@@ -44,6 +44,7 @@ typedef struct
 	int type;
 	int tiles[7][7][4];
 	Position playerPosition;
+	int playerTile[4];
 	int numItems;
 	Item items[MAX_ITEMS];
 	int numQuests;
@@ -80,6 +81,11 @@ int findPathToItem(const Turn turn,
 int notOnPreviousPath(const Position playerPosition, const Position previousPath[49]);
 void addPositionToPreviousPath(const Position playerPosition, Position previousPath[49]);
 
+void fillCommonPath(const Position playerPosition,
+                    int *pathNumber,
+                    int movesNumber[MAX_MOVES],
+                    int movesList[MAX_MOVES][MAX_MOVES+2]);
+
 /***************************************************************************************************
  * Main
  **************************************************************************************************/
@@ -88,8 +94,6 @@ int main()
 	while (1) {
 		// Create the structure that will hold all the informations of the current turn
 		Turn turn = parseInput();
-
-		// To debug: fprintf(stderr, "Debug messages...\n");
 
 		if (turn.type == 0) {
 			pushTurn(turn);
@@ -126,9 +130,8 @@ Turn parseInput(void)
 	char playerTileChar[5];
 	scanf("%d%d%d%s", &numPlayerCards, &turn.playerPosition.x, &turn.playerPosition.y, playerTileChar);
 
-	int playerTile[4];
 	for (int i = 0; i < 4; i++) {
-		playerTile[i] = (int)(playerTileChar[i]) - 48;
+		turn.playerTile[i] = (int)(playerTileChar[i]) - 48;
 	}
 
 	int numOpponentCards; // the total number of quests for a opponent (hidden and revealed)
@@ -181,77 +184,260 @@ Turn parseInput(void)
  **************************************************************************************************/
 void pushTurn(const Turn turn)
 {
-	if (isLastMoveTurnPass) {
-		// Retry last push
-		switch (lastPush[DIRECTION]) {
-			case UP   : printf("PUSH %d UP\n", lastPush[ID]); break;
-			case RIGHT: printf("PUSH %d RIGHT\n", lastPush[ID]); break;
-			case DOWN : printf("PUSH %d DOWN\n", lastPush[ID]); break;
-			case LEFT : printf("PUSH %d LEFT\n", lastPush[ID]); break;
+	// Try all possible PUSH to see if it allow us to reach an item
+	int currentItem = 0;
+	int reachable = 0;
+	for (int q = 0; q < turn.numQuests; q++) {
+		for (int i = 0; i < turn.numItems; i++) {
+			if (strncmp(turn.items[i].name, turn.quests[q].name, 11) == 0) {
+				currentItem = i;
+
+				// Try all PUSH
+				for (int dir = 0; dir < 4; dir++) {
+					for (int id = 0; id < 7; id++) {
+						// Make a copy of the tiles, player position and item position modified by
+						// this potential push
+						Turn turnPushed = turn;
+
+						switch (dir) {
+							case UP:
+								for (int y = 0; y < 6; y++) {
+									for (int t = 0; t < 4; t++) {
+										turnPushed.tiles[id][y][t] = turn.tiles[id][y+1][t];
+									}
+
+								}
+								for (int t = 0; t < 4; t++) {
+									turnPushed.tiles[id][6][t] = turn.playerTile[t];
+								}
+
+								if (turn.playerPosition.x == id) {
+									if (turn.playerPosition.y > 0) {
+										turnPushed.playerPosition.y--;
+									}
+									else {
+										turnPushed.playerPosition.y = 6;
+									}
+								}
+								if (turn.items[currentItem].x == id) {
+									if (turn.items[currentItem].y > 0) {
+										turnPushed.items[currentItem].y--;
+									}
+									else {
+										turnPushed.items[currentItem].x = -1;
+										turnPushed.items[currentItem].y = -1;
+									}
+								}
+								break;
+							case RIGHT:
+								for (int x = 1; x < 7; x++) {
+									for (int t = 0; t < 4; t++) {
+										turnPushed.tiles[x][id][t] = turn.tiles[x-1][id][t];
+									}
+
+								}
+								for (int t = 0; t < 4; t++) {
+									turnPushed.tiles[0][id][t] = turn.playerTile[t];
+								}
+
+								if (turn.playerPosition.y == id) {
+									if (turn.playerPosition.x < 6) {
+										turnPushed.playerPosition.x++;
+									}
+									else {
+										turnPushed.playerPosition.x = 0;
+									}
+								}
+								if (turn.items[currentItem].y == id) {
+									if (turn.items[currentItem].x < 6) {
+										turnPushed.items[currentItem].x++;
+									}
+									else {
+										turnPushed.items[currentItem].x = -1;
+										turnPushed.items[currentItem].y = -1;
+									}
+								}
+								break;
+							case DOWN:
+								for (int y = 1; y < 7; y++) {
+									for (int t = 0; t < 4; t++) {
+										turnPushed.tiles[id][y][t] = turn.tiles[id][y-1][t];
+									}
+
+								}
+								for (int t = 0; t < 4; t++) {
+									turnPushed.tiles[id][0][t] = turn.playerTile[t];
+								}
+
+								if (turn.playerPosition.x == id) {
+									if (turn.playerPosition.y < 6) {
+										turnPushed.playerPosition.y++;
+									}
+									else {
+										turnPushed.playerPosition.y = 0;
+									}
+								}
+								if (turn.items[currentItem].x == id) {
+									if (turn.items[currentItem].y < 6) {
+										turnPushed.items[currentItem].y++;
+									}
+									else {
+										turnPushed.items[currentItem].x = -1;
+										turnPushed.items[currentItem].y = -1;
+									}
+								}
+								break;
+							case LEFT:
+								for (int x = 0; x < 6; x++) {
+									for (int t = 0; t < 4; t++) {
+										turnPushed.tiles[x][id][t] = turn.tiles[x+1][id][t];
+									}
+
+								}
+								for (int t = 0; t < 4; t++) {
+									turnPushed.tiles[6][id][t] = turn.playerTile[t];
+								}
+
+								if (turn.playerPosition.y == id) {
+									if (turn.playerPosition.x > 0) {
+										turnPushed.playerPosition.x--;
+									}
+									else {
+										turnPushed.playerPosition.x = 6;
+									}
+								}
+								if (turn.items[currentItem].y == id) {
+									if (turn.items[currentItem].x > 0) {
+										turnPushed.items[currentItem].x--;
+									}
+									else {
+										turnPushed.items[currentItem].x = -1;
+										turnPushed.items[currentItem].y = -1;
+									}
+								}
+								break;
+						}
+
+						int pathNumber = 0;
+						int pathSelected = 0;
+						int movesNumber[MAX_MOVES] = {0};
+						int movesList[MAX_MOVES][MAX_MOVES+2] = {{0}};
+						Position previousPath[49];
+
+						// Initalize the previous path position array with unreachable value to
+						// detect which index is not yet used
+						for (int i = 0; i < 49; i++) {
+							previousPath[i].x = 10;
+							previousPath[i].y = 10;
+						}
+
+						if (findPathToItem(turnPushed,
+						                   currentItem,
+										   NONE,
+										   &pathNumber,
+										   movesNumber,
+										   movesList,
+										   previousPath)) {
+							reachable = 1;
+							fprintf(stderr, "Item reachable with push: %d, %d\n", dir, id);
+
+							switch (dir) {
+								case UP   : printf("PUSH %d UP\n", id); break;
+								case RIGHT: printf("PUSH %d RIGHT\n", id); break;
+								case DOWN : printf("PUSH %d DOWN\n", id); break;
+								case LEFT : printf("PUSH %d LEFT\n", id); break;
+							}
+
+							break;
+						}
+					}
+					if (reachable) {
+						break;
+					}
+				}
+				if (reachable) {
+					break;
+				}
+			}
+		}
+		if (reachable) {
+			break;
 		}
 	}
-	else {
-		// Select the item we want to reach
-		int currentItem = 0;
-		for (int i = 0; i < turn.numItems; i++) {
-			if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
-				currentItem = i;
-				break;
-			}
-		}
 
-		int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
-		int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
-
-		fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
-
-		if (moveDirectionY == 0) {
-			if (turn.playerPosition.y > 3) {
-				printf("PUSH %d UP\n", turn.playerPosition.x);
-				lastPush[ID] = turn.playerPosition.x;
-				lastPush[DIRECTION] = UP;
-			}
-			else {
-				printf("PUSH %d DOWN\n", turn.playerPosition.x);
-				lastPush[ID] = turn.playerPosition.x;
-				lastPush[DIRECTION] = DOWN;
-			}
-		}
-		else if (moveDirectionX == 0){
-			if (turn.playerPosition.x > 3) {
-				printf("PUSH %d LEFT\n", turn.playerPosition.y);
-				lastPush[ID] = turn.playerPosition.y;
-				lastPush[DIRECTION] = LEFT;
-			}
-			else {
-				printf("PUSH %d RIGHT\n", turn.playerPosition.y);
-				lastPush[ID] = turn.playerPosition.y;
-				lastPush[DIRECTION] = RIGHT;
+	if (reachable == 0) {
+		if (isLastMoveTurnPass) {
+			// Retry last push
+			switch (lastPush[DIRECTION]) {
+				case UP   : printf("PUSH %d UP\n", lastPush[ID]); break;
+				case RIGHT: printf("PUSH %d RIGHT\n", lastPush[ID]); break;
+				case DOWN : printf("PUSH %d DOWN\n", lastPush[ID]); break;
+				case LEFT : printf("PUSH %d LEFT\n", lastPush[ID]); break;
 			}
 		}
 		else {
-			if (moveDirectionX >= moveDirectionY) {
-				if (moveDirectionX < 0) {
-					printf("PUSH %d RIGHT\n", turn.playerPosition.y);
-					lastPush[ID] = turn.playerPosition.y;
-					lastPush[DIRECTION] = RIGHT;
-				}
-				else {
-					printf("PUSH %d LEFT\n", turn.playerPosition.y);
-					lastPush[ID] = turn.playerPosition.y;
-					lastPush[DIRECTION] = LEFT;
+			// Select the item we want to reach
+			int currentItem = 0;
+			for (int i = 0; i < turn.numItems; i++) {
+				if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
+					currentItem = i;
+					break;
 				}
 			}
-			else {
-				if (moveDirectionY < 0) {
+
+			int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
+			int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
+
+			fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
+
+			if (moveDirectionY == 0) {
+				if (turn.playerPosition.y > 3) {
+					printf("PUSH %d UP\n", turn.playerPosition.x);
+					lastPush[ID] = turn.playerPosition.x;
+					lastPush[DIRECTION] = UP;
+				}
+				else {
 					printf("PUSH %d DOWN\n", turn.playerPosition.x);
 					lastPush[ID] = turn.playerPosition.x;
 					lastPush[DIRECTION] = DOWN;
 				}
+			}
+			else if (moveDirectionX == 0){
+				if (turn.playerPosition.x > 3) {
+					printf("PUSH %d LEFT\n", turn.playerPosition.y);
+					lastPush[ID] = turn.playerPosition.y;
+					lastPush[DIRECTION] = LEFT;
+				}
 				else {
-					printf("PUSH %d UP\n", turn.playerPosition.x);
-					lastPush[ID] = turn.playerPosition.x;
-					lastPush[DIRECTION] = UP;
+					printf("PUSH %d RIGHT\n", turn.playerPosition.y);
+					lastPush[ID] = turn.playerPosition.y;
+					lastPush[DIRECTION] = RIGHT;
+				}
+			}
+			else {
+				if (moveDirectionX >= moveDirectionY) {
+					if (moveDirectionX < 0) {
+						printf("PUSH %d RIGHT\n", turn.playerPosition.y);
+						lastPush[ID] = turn.playerPosition.y;
+						lastPush[DIRECTION] = RIGHT;
+					}
+					else {
+						printf("PUSH %d LEFT\n", turn.playerPosition.y);
+						lastPush[ID] = turn.playerPosition.y;
+						lastPush[DIRECTION] = LEFT;
+					}
+				}
+				else {
+					if (moveDirectionY < 0) {
+						printf("PUSH %d DOWN\n", turn.playerPosition.x);
+						lastPush[ID] = turn.playerPosition.x;
+						lastPush[DIRECTION] = DOWN;
+					}
+					else {
+						printf("PUSH %d UP\n", turn.playerPosition.x);
+						lastPush[ID] = turn.playerPosition.x;
+						lastPush[DIRECTION] = UP;
+					}
 				}
 			}
 		}
@@ -263,28 +449,87 @@ void pushTurn(const Turn turn)
  **************************************************************************************************/
 void moveTurn(const Turn turn)
 {
-	for (int i = 0; i < turn.numQuests; i++) {
-		fprintf(stderr, "Quest: %s\n", turn.quests[i].name);
-	}
+	// Select the item we want to reach by testing all the quest and checking if we can reach it
+	// this turn
+	int currentItem = 0;
+	int reachable = 0;
+	int minItemsDistance[MAX_ITEMS];
+
+	// Initalize distance array to very hight distances
 	for (int i = 0; i < turn.numItems; i++) {
-		fprintf(stderr, "Item: %s\n", turn.items[i].name);
+		minItemsDistance[i] = 100;
 	}
 
-	// Select the item we want to reach
-	int currentItem = 0;
-	for (int i = 0; i < turn.numItems; i++) {
-		if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
-			currentItem = i;
+	for (int q = 0; q < turn.numQuests; q++) {
+		for (int i = 0; i < turn.numItems; i++) {
+			if (strncmp(turn.items[i].name, turn.quests[q].name, 11) == 0) {
+				currentItem = i;
+
+				int pathNumber = 0;
+				int pathSelected = 0;
+				int movesNumber[MAX_MOVES] = {0};
+				int movesList[MAX_MOVES][MAX_MOVES+2] = {{0}};
+				Position previousPath[49];
+
+				// Initalize the previous path position array with unreachable value to detect
+				// which index is not yet used
+				for (int i = 0; i < 49; i++) {
+					previousPath[i].x = 10;
+					previousPath[i].y = 10;
+				}
+
+				if (findPathToItem(turn,
+				                   currentItem,
+								   NONE,
+								   &pathNumber,
+								   movesNumber,
+								   movesList,
+								   previousPath)) {
+					reachable = 1;
+					break;
+				}
+				else {
+					// Find the path which lead the closest to this item
+					int minDistance = abs(movesList[0][MAX_MOVES] - turn.items[currentItem].x)
+					                + abs(movesList[0][MAX_MOVES+1] - turn.items[currentItem].y);
+
+					for (int p = 0; p < pathNumber; p++) {
+						// Compute distance to the item
+						int currentDistance =
+						    abs(movesList[p][MAX_MOVES] - turn.items[currentItem].x)
+						    + abs(movesList[p][MAX_MOVES+1] - turn.items[currentItem].y);
+
+						if (currentDistance < minDistance) {
+							minDistance = currentDistance;
+						}
+
+					}
+					minItemsDistance[i] = minDistance;
+				}
+			}
+		}
+		if (reachable) {
 			break;
 		}
 	}
+
+	if (reachable == 0) {
+		// Select closest item
+		int minDistance = 100;
+
+		for (int i = 0; i < turn.numItems; i++) {
+			if (minItemsDistance[i] < minDistance) {
+				minDistance = minItemsDistance[i];
+				currentItem = i;
+			}
+		}
+	}
+
 	fprintf(stderr, "Selected item: %s\n", turn.items[currentItem].name);
 
 	// Try to go to the selected item
-	int moveNumber = 0;
-	int moveList[MAX_MOVES];
-
 	int pathNumber = 0;
+	int pathSelected = 0;
 	int movesNumber[MAX_MOVES] = {0};
 	int movesList[MAX_MOVES][MAX_MOVES+2] = {{0}};
 	Position previousPath[49];
@@ -296,21 +541,26 @@ void moveTurn(const Turn turn)
 		previousPath[i].y = 10;
 	}
 
-	if (findPathToItem(turn, currentItem, NONE, &pathNumber, movesNumber, movesList, previousPath)) {
-		moveNumber = movesNumber[pathNumber];
+	if (findPathToItem(turn,
+	                   currentItem,
+					   NONE,
+					   &pathNumber,
+					   movesNumber,
+					   movesList,
+					   previousPath)) {
+		pathSelected = pathNumber;
 
-		fprintf(stderr, "Number of path: %d\n", pathNumber);
-		fprintf(stderr, "Item found :)\nMove:");
-		for (int i = 0; i < moveNumber; i++) {
-			fprintf(stderr, " %d", movesList[pathNumber][i]);
-			moveList[i] = movesList[pathNumber][i];
+		fprintf(stderr, "Item found :)\n");
+		fprintf(stderr, "Number of path: %d\nMove:", pathNumber);
+		for (int i = 0; i < movesNumber[pathSelected]; i++) {
+			fprintf(stderr, " %d", movesList[pathSelected][i]);
 		}
 	    fprintf(stderr, "\n");
 	}
 	else {
+		fprintf(stderr, "Item not found :(\n");
 		// Print all paths
-		fprintf(stderr, "COUCOUCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\n");
-		fprintf(stderr, "Number of path: %d\n", pathNumber);
+		fprintf(stderr, "All paths: number of paths: %d\n", pathNumber);
 		for (int i = 0; i < pathNumber; i++) {
 			fprintf(stderr, "Path number: %d\nMove:", i);
 
@@ -320,105 +570,36 @@ void moveTurn(const Turn turn)
 			fprintf(stderr, "\n");
 		}
 
-		// Take the first path for the moment
-	    fprintf(stderr, "Number of path: %d\n", pathNumber);
+		// Find the path which lead the closest to this item
+		pathSelected = 0;
+		int minDistance = abs(movesList[pathSelected][MAX_MOVES] - turn.items[currentItem].x)
+		                + abs(movesList[pathSelected][MAX_MOVES+1] - turn.items[currentItem].y);
 
-		moveNumber = movesNumber[0];
+		for (int p = 0; p < pathNumber; p++) {
+			// Compute distance to the item
+			int currentDistance =
+			    abs(movesList[p][MAX_MOVES] - turn.items[currentItem].x)
+			    + abs(movesList[p][MAX_MOVES+1] - turn.items[currentItem].y);
 
-	    fprintf(stderr, "Item not found :(\nMove:");
-		for (int i = 0; i < moveNumber; i++) {
-			fprintf(stderr, " %d", movesList[0][i]);
-			moveList[i] = movesList[0][i];
+			if (currentDistance < minDistance) {
+				minDistance = currentDistance;
+				pathSelected = p;
+			}
+
+		}
+
+	    fprintf(stderr, "Path selected: %d\nMove:", pathSelected);
+		for (int i = 0; i < movesNumber[pathSelected]; i++) {
+			fprintf(stderr, " %d", movesList[pathSelected][i]);
 		}
 	    fprintf(stderr, "\n");
 	}
 
-
-	//int continueToMove = 1;
-
-	//while (continueToMove && moveNumber < 20) {
-	//	int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
-	//	int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
-
-	//	fprintf(stderr, "PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
-	//	fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", turn.tiles[turn.playerPosition.x][turn.playerPosition.y][UP], turn.tiles[turn.playerPosition.x][turn.playerPosition.y][RIGHT], turn.tiles[turn.playerPosition.x][turn.playerPosition.y][DOWN], turn.tiles[turn.playerPosition.x][turn.playerPosition.y][LEFT]);
-	//	fprintf(stderr, "UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", turn.tiles[turn.playerPosition.x][turn.playerPosition.y - 1][DOWN], turn.tiles[turn.playerPosition.x + 1][turn.playerPosition.y][LEFT], turn.tiles[turn.playerPosition.x][turn.playerPosition.y + 1][UP], turn.tiles[turn.playerPosition.x - 1][turn.playerPosition.y][RIGHT]);
-	//	fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
-	//	fprintf(stderr, "Can go UP: %d, RIGHT: %d, DOWN: %d, LEFT: %d\n", canGoUp(turn), canGoRight(turn), canGoDown(turn), canGoLeft(turn));
-
-	//	if (moveDirectionX < 0 && canGoRight(turn)) {
-	//		moveList[moveNumber] = RIGHT;
-	//		moveNumber++;
-
-	//		turn.playerPosition.x++;
-	//	}
-	//	else if (moveDirectionX > 0 && canGoLeft(turn)) {
-	//		moveList[moveNumber] = LEFT;
-	//		moveNumber++;
-
-	//		turn.playerPosition.x--;
-	//	}
-	//	else if (moveDirectionY < 0 && canGoDown(turn)) {
-	//		moveList[moveNumber] = DOWN;
-	//		moveNumber++;
-
-	//		turn.playerPosition.y++;
-	//	}
-	//	else if (moveDirectionY > 0 && canGoUp(turn)) {
-	//		moveList[moveNumber] = UP;
-	//		moveNumber++;
-
-	//		turn.playerPosition.y--;
-	//	}
-	//	else {
-	//		continueToMove = 0;
-	//	}
-	//}
-
-	//if (moveNumber == 0) {
-	//	continueToMove = 1;
-
-	//	while (continueToMove && moveNumber < 20) {
-	//		int lastMove;
-	//		if (canGoRight(turn) && lastMove != LEFT) {
-	//			moveList[moveNumber] = RIGHT;
-	//			moveNumber++;
-	//			lastMove = RIGHT;
-
-	//			turn.playerPosition.x++;
-	//		}
-	//		else if (canGoLeft(turn) && lastMove != RIGHT) {
-	//			moveList[moveNumber] = LEFT;
-	//			moveNumber++;
-	//			lastMove = LEFT;
-
-	//			turn.playerPosition.x--;
-	//		}
-	//		else if (canGoDown(turn) && lastMove != UP) {
-	//			moveList[moveNumber] = DOWN;
-	//			moveNumber++;
-	//			lastMove = DOWN;
-
-	//			turn.playerPosition.y++;
-	//		}
-	//		else if (canGoUp(turn) && lastMove != DOWN) {
-	//			moveList[moveNumber] = UP;
-	//			moveNumber++;
-	//			lastMove = UP;
-
-	//			turn.playerPosition.y--;
-	//		}
-	//		else {
-	//			continueToMove = 0;
-	//		}
-	//	}
-	//}
-
-	if (moveNumber > 0) {
+	if (movesNumber[pathSelected] > 0) {
 		printf("MOVE");
 
-		for (int i = 0; i < moveNumber; i++) {
-			switch (moveList[i]) {
+		for (int i = 0; i < movesNumber[pathSelected]; i++) {
+			switch (movesList[pathSelected][i]) {
 				case UP   : printf(" UP"); break;
 				case RIGHT: printf(" RIGHT"); break;
 				case DOWN : printf(" DOWN"); break;
@@ -509,12 +690,12 @@ int findPathToItem(const Turn turn,
 				   Position previousPath[49])
 {
 	int branchNumber = 0;
-	fprintf(stderr, "PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
+	//fprintf(stderr, "PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
 
 	// First check if we have already reach the item
 	if (turn.playerPosition.x == turn.items[currentItem].x
 	    && turn.playerPosition.y == turn.items[currentItem].y) {
-		fprintf(stderr, "Item found !");
+		//fprintf(stderr, "Item found !");
 		return 1;
 	}
 
@@ -525,14 +706,20 @@ int findPathToItem(const Turn turn,
 
 		if (canGoUp(turn) && lastMove != DOWN) {
 			branchNumber++;
-			fprintf(stderr, "New up move\n");
+			//fprintf(stderr, "New up move\n");
 			// Try to find the item in the next up tile
 			Turn nextPosition = turn;
 			nextPosition.playerPosition.y--;
 			movesList[*pathNumber][movesNumber[*pathNumber]] = UP;
 			movesNumber[*pathNumber]++;
 
-			if (findPathToItem(nextPosition, currentItem, UP, pathNumber, movesNumber, movesList, previousPath)) {
+			if (findPathToItem(nextPosition,
+			                   currentItem,
+							   UP,
+							   pathNumber,
+							   movesNumber,
+							   movesList,
+							   previousPath)) {
 				return 1;
 			}
 		}
@@ -540,37 +727,24 @@ int findPathToItem(const Turn turn,
 		if (canGoRight(turn) && lastMove != LEFT) {
 			if (branchNumber > 0) {
 				// Find common ancestor and add common path at the begining of this path
-				Position previousPosition = {movesList[*pathNumber-1][MAX_MOVES], movesList[*pathNumber-1][MAX_MOVES+1]};
-				for (int i = movesNumber[*pathNumber-1] - 1; i >= 0; i--) {
-					switch (movesList[*pathNumber-1][i]) {
-						case UP   : previousPosition.y++; break;
-						case RIGHT: previousPosition.x--; break;
-						case DOWN : previousPosition.y--; break;
-						case LEFT : previousPosition.x++; break;
-					}
-					if (previousPosition.x == turn.playerPosition.x && previousPosition.y == turn.playerPosition.y) {
-						// Common ancestor
-						fprintf(stderr, "Common ancestor PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
-
-						for (int j = 0; j < i; j++) {
-							movesList[*pathNumber][j] = movesList[*pathNumber-1][j];
-							movesNumber[*pathNumber] = j + 1;
-							fprintf(stderr, " %d", movesList[*pathNumber][j]);
-						}
-						break;
-					}
-				}
+				fillCommonPath(turn.playerPosition, pathNumber, movesNumber, movesList);
 			}
 
 			branchNumber++;
-			fprintf(stderr, "New right move\n");
+			//fprintf(stderr, "New right move\n");
 			// Try to find the item in the next right tile
 			Turn nextPosition = turn;
 			nextPosition.playerPosition.x++;
 			movesList[*pathNumber][movesNumber[*pathNumber]] = RIGHT;
 			movesNumber[*pathNumber]++;
 
-			if (findPathToItem(nextPosition, currentItem, RIGHT, pathNumber, movesNumber, movesList, previousPath)) {
+			if (findPathToItem(nextPosition,
+			                   currentItem,
+							   RIGHT,
+							   pathNumber,
+							   movesNumber,
+							   movesList,
+							   previousPath)) {
 				return 1;
 			}
 		}
@@ -578,37 +752,24 @@ int findPathToItem(const Turn turn,
 		if (canGoDown(turn) && lastMove != UP) {
 			if (branchNumber > 0) {
 				// Find common ancestor and add common path at the begining of this path
-				Position previousPosition = {movesList[*pathNumber-1][MAX_MOVES], movesList[*pathNumber-1][MAX_MOVES+1]};
-				for (int i = movesNumber[*pathNumber-1] - 1; i >= 0; i--) {
-					switch (movesList[*pathNumber-1][i]) {
-						case UP   : previousPosition.y++; break;
-						case RIGHT: previousPosition.x--; break;
-						case DOWN : previousPosition.y--; break;
-						case LEFT : previousPosition.x++; break;
-					}
-					if (previousPosition.x == turn.playerPosition.x && previousPosition.y == turn.playerPosition.y) {
-						// Common ancestor
-						fprintf(stderr, "Common ancestor PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
-
-						for (int j = 0; j < i; j++) {
-							movesList[*pathNumber][j] = movesList[*pathNumber-1][j];
-							movesNumber[*pathNumber] = j + 1;
-							fprintf(stderr, " %d", movesList[*pathNumber][j]);
-						}
-						break;
-					}
-				}
+				fillCommonPath(turn.playerPosition, pathNumber, movesNumber, movesList);
 			}
 
 			branchNumber++;
-			fprintf(stderr, "New down move\n");
+			//fprintf(stderr, "New down move\n");
 			// Try to find the item in the next down tile
 			Turn nextPosition = turn;
 			nextPosition.playerPosition.y++;
 			movesList[*pathNumber][movesNumber[*pathNumber]] = DOWN;
 			movesNumber[*pathNumber]++;
 
-			if (findPathToItem(nextPosition, currentItem, DOWN, pathNumber, movesNumber, movesList, previousPath)) {
+			if (findPathToItem(nextPosition,
+			                   currentItem,
+							   DOWN,
+							   pathNumber,
+							   movesNumber,
+							   movesList,
+							   previousPath)) {
 				return 1;
 			}
 		}
@@ -616,60 +777,47 @@ int findPathToItem(const Turn turn,
 		if (canGoLeft(turn) && lastMove != RIGHT) {
 			if (branchNumber > 0) {
 				// Find common ancestor and add common path at the begining of this path
-				Position previousPosition = {movesList[*pathNumber-1][MAX_MOVES], movesList[*pathNumber-1][MAX_MOVES+1]};
-				for (int i = movesNumber[*pathNumber-1] - 1; i >= 0; i--) {
-					switch (movesList[*pathNumber-1][i]) {
-						case UP   : previousPosition.y++; break;
-						case RIGHT: previousPosition.x--; break;
-						case DOWN : previousPosition.y--; break;
-						case LEFT : previousPosition.x++; break;
-					}
-					if (previousPosition.x == turn.playerPosition.x && previousPosition.y == turn.playerPosition.y) {
-						// Common ancestor
-						fprintf(stderr, "Common ancestor PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
-
-						for (int j = 0; j < i; j++) {
-							movesList[*pathNumber][j] = movesList[*pathNumber-1][j];
-							movesNumber[*pathNumber] = j + 1;
-							fprintf(stderr, " %d", movesList[*pathNumber][j]);
-						}
-						break;
-					}
-				}
+				fillCommonPath(turn.playerPosition, pathNumber, movesNumber, movesList);
 			}
 
 			branchNumber++;
-			fprintf(stderr, "New left move\n");
+			//fprintf(stderr, "New left move\n");
 			// Try to find the item in the next left tile
 			Turn nextPosition = turn;
 			nextPosition.playerPosition.x--;
 			movesList[*pathNumber][movesNumber[*pathNumber]] = LEFT;
 			movesNumber[*pathNumber]++;
 
-			if (findPathToItem(nextPosition, currentItem, LEFT, pathNumber, movesNumber, movesList, previousPath)) {
+			if (findPathToItem(nextPosition,
+			                   currentItem,
+							   LEFT,
+							   pathNumber,
+							   movesNumber,
+							   movesList,
+							   previousPath)) {
 				return 1;
 			}
 		}
 	}
 
-	fprintf(stderr, "Branch number: %d\n", branchNumber);
+	//fprintf(stderr, "Branch number: %d\n", branchNumber);
 
 	if (branchNumber == 0) {
-		fprintf(stderr, "End of path reached\n");
-		fprintf(stderr, "Item not found on this path:");
-		for (int i = 0; i < movesNumber[*pathNumber]; i++) {
-			fprintf(stderr, " %d", movesList[*pathNumber][i]);
-		}
+		//fprintf(stderr, "End of path reached\n");
+		//fprintf(stderr, "Item not found on this path:");
+		//for (int i = 0; i < movesNumber[*pathNumber]; i++) {
+		//	fprintf(stderr, " %d", movesList[*pathNumber][i]);
+		//}
 
 		// Add the current position at the end of the path
-		fprintf(stderr, "Dead end position PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
+		//fprintf(stderr, "Dead end position PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
 		movesList[*pathNumber][MAX_MOVES] = turn.playerPosition.x;
 		movesList[*pathNumber][MAX_MOVES+1] = turn.playerPosition.y;
 
-		fprintf(stderr, "\nTry new path\n");
+		//fprintf(stderr, "\nTry new path\n");
 		// We have reached the end of this path, try a new one
 		*pathNumber = *pathNumber + 1;
-		fprintf(stderr, "New path number: %d\n", *pathNumber);
+		//fprintf(stderr, "New path number: %d\n", *pathNumber);
 	}
 
 	return 0;
@@ -704,6 +852,39 @@ void addPositionToPreviousPath(const Position playerPosition, Position previousP
 				previousPath[i] = playerPosition;
 				break;
 			}
+		}
+	}
+}
+
+/***************************************************************************************************
+ * fillCommonPath
+ **************************************************************************************************/
+void fillCommonPath(const Position playerPosition,
+                    int *pathNumber,
+                    int movesNumber[MAX_MOVES],
+                    int movesList[MAX_MOVES][MAX_MOVES+2])
+{
+	Position previousPosition = {movesList[*pathNumber-1][MAX_MOVES],
+	                             movesList[*pathNumber-1][MAX_MOVES+1]};
+	for (int i = movesNumber[*pathNumber-1] - 1; i >= 0; i--) {
+		switch (movesList[*pathNumber-1][i]) {
+			case UP   : previousPosition.y++; break;
+			case RIGHT: previousPosition.x--; break;
+			case DOWN : previousPosition.y--; break;
+			case LEFT : previousPosition.x++; break;
+		}
+
+		if (previousPosition.x == playerPosition.x
+		    && previousPosition.y == playerPosition.y) {
+			// Index of common ancestor found
+			//fprintf(stderr, "Common ancestor PX: %d, PY: %d\n", turn.playerPosition.x, turn.playerPosition.y);
+
+			for (int j = 0; j < i; j++) {
+				movesList[*pathNumber][j] = movesList[*pathNumber-1][j];
+				movesNumber[*pathNumber] = j + 1;
+				//fprintf(stderr, " %d", movesList[*pathNumber][j]);
+			}
+			break;
 		}
 	}
 }
