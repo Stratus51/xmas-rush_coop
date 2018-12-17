@@ -5,9 +5,10 @@
 /***************************************************************************************************
  * Defines
  **************************************************************************************************/
-#define MAX_ITEMS  12
-#define MAX_QUESTS 3
-#define MAX_MOVES  20
+#define MAX_ITEMS               12
+#define MAX_QUESTS              3
+#define MAX_MOVES               20
+#define MAX_NUMBER_OF_SAME_PUSH 2
 
 #define UP    0
 #define RIGHT 1
@@ -44,6 +45,7 @@ typedef struct
 	int type;
 	int tiles[7][7][4];
 	Position playerPosition;
+	Position opponentPosition;
 	int playerTile[4];
 	int numItems;
 	Item items[MAX_ITEMS];
@@ -56,6 +58,7 @@ typedef struct
  **************************************************************************************************/
 int isLastMoveTurnPass = 0;
 int lastPush[2];
+int numberOfSamePush = 0;
 
 /***************************************************************************************************
  * Functions
@@ -135,10 +138,8 @@ Turn parseInput(void)
 	}
 
 	int numOpponentCards; // the total number of quests for a opponent (hidden and revealed)
-	int opponentX;
-	int opponentY;
 	char opponentTileChar[5];
-	scanf("%d%d%d%s", &numOpponentCards, &opponentX, &opponentY, opponentTileChar);
+	scanf("%d%d%d%s", &numOpponentCards, &turn.opponentPosition.x, &turn.opponentPosition.y, opponentTileChar);
 
 	int numItems; // the total number of items available on board and on player tiles
 	scanf("%d", &numItems);
@@ -184,9 +185,31 @@ Turn parseInput(void)
  **************************************************************************************************/
 void pushTurn(const Turn turn)
 {
+	if (numberOfSamePush > MAX_NUMBER_OF_SAME_PUSH) {
+		fprintf(stderr, "Try different PUSH to break the loop\n");
+		int dir = lastPush[DIRECTION] + 1;
+		int id = lastPush[ID];
+
+		if (dir > 3) {
+			dir = 0;
+		}
+
+		switch (dir) {
+			case UP   : printf("PUSH %d UP\n", id); break;
+			case RIGHT: printf("PUSH %d RIGHT\n", id); break;
+			case DOWN : printf("PUSH %d DOWN\n", id); break;
+			case LEFT : printf("PUSH %d LEFT\n", id); break;
+		}
+
+		numberOfSamePush = 0;
+		lastPush[DIRECTION] = dir;
+		lastPush[ID] = id;
+
+		return;
+	}
+
 	// Try all possible PUSH to see if it allow us to reach an item
 	int currentItem = 0;
-	int reachable = 0;
 	for (int q = 0; q < turn.numQuests; q++) {
 		for (int i = 0; i < turn.numItems; i++) {
 			if (strncmp(turn.items[i].name, turn.quests[q].name, 11) == 0) {
@@ -338,8 +361,18 @@ void pushTurn(const Turn turn)
 										   movesNumber,
 										   movesList,
 										   previousPath)) {
-							reachable = 1;
 							fprintf(stderr, "Item reachable with push: %d, %d\n", dir, id);
+							fprintf(stderr, "Selected item: %s\n", turn.items[currentItem].name);
+
+							// Count number of same PUSH
+							if (lastPush[ID] == id && lastPush[DIRECTION] == dir) {
+								numberOfSamePush++;
+							}
+							else {
+								lastPush[ID] = id;
+								lastPush[DIRECTION] = dir;
+								numberOfSamePush = 0;
+							}
 
 							switch (dir) {
 								case UP   : printf("PUSH %d UP\n", id); break;
@@ -348,100 +381,140 @@ void pushTurn(const Turn turn)
 								case LEFT : printf("PUSH %d LEFT\n", id); break;
 							}
 
-							break;
+							return;
 						}
 					}
-					if (reachable) {
-						break;
-					}
-				}
-				if (reachable) {
-					break;
 				}
 			}
 		}
-		if (reachable) {
-			break;
-		}
 	}
 
-	if (reachable == 0) {
-		if (isLastMoveTurnPass) {
-			// Retry last push
-			switch (lastPush[DIRECTION]) {
-				case UP   : printf("PUSH %d UP\n", lastPush[ID]); break;
-				case RIGHT: printf("PUSH %d RIGHT\n", lastPush[ID]); break;
-				case DOWN : printf("PUSH %d DOWN\n", lastPush[ID]); break;
-				case LEFT : printf("PUSH %d LEFT\n", lastPush[ID]); break;
+	// Try to move the opponent to the left or down
+	//int dir;
+	//int id;
+
+	//if (lastPush[DIRECTION] != LEFT && lastPush[ID] != turn.opponentPosition.y) {
+	//	dir = LEFT;
+	//	id = turn.opponentPosition.y;
+
+	//	if (id > 6) {
+	//		id = 0;
+	//	}
+	//}
+	//else {
+	//	dir = DOWN;
+	//	id = turn.opponentPosition.x;
+
+	//	if (id > 6) {
+	//		id = 0;
+	//	}
+	//}
+
+	//// Count number of same PUSH
+	//if (lastPush[ID] == id && lastPush[DIRECTION] == dir) {
+	//	numberOfSamePush++;
+	//}
+	//else {
+	//	lastPush[ID] = id;
+	//	lastPush[DIRECTION] = dir;
+	//	numberOfSamePush = 0;
+	//}
+
+	//switch (dir) {
+	//	case UP   : printf("PUSH %d UP\n", id); break;
+	//	case RIGHT: printf("PUSH %d RIGHT\n", id); break;
+	//	case DOWN : printf("PUSH %d DOWN\n", id); break;
+	//	case LEFT : printf("PUSH %d LEFT\n", id); break;
+	//}
+
+	//if (isLastMoveTurnPass) {
+	//	// Count number of same PUSH
+	//	numberOfSamePush++;
+
+	//	// Retry last push
+	//	switch (lastPush[DIRECTION]) {
+	//		case UP   : printf("PUSH %d UP\n", lastPush[ID]); break;
+	//		case RIGHT: printf("PUSH %d RIGHT\n", lastPush[ID]); break;
+	//		case DOWN : printf("PUSH %d DOWN\n", lastPush[ID]); break;
+	//		case LEFT : printf("PUSH %d LEFT\n", lastPush[ID]); break;
+	//	}
+	//}
+	//else {
+		// Select the item we want to reach
+		for (int i = 0; i < turn.numItems; i++) {
+			if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
+				currentItem = i;
+				break;
+			}
+		}
+
+		int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
+		int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
+
+		fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
+		int dir;
+		int id;
+
+		if (moveDirectionY == 0) {
+			if (turn.playerPosition.y > 3) {
+				id = turn.playerPosition.x;
+				dir = UP;
+			}
+			else {
+				id = turn.playerPosition.x;
+				dir = DOWN;
+			}
+		}
+		else if (moveDirectionX == 0){
+			if (turn.playerPosition.x > 3) {
+				id = turn.playerPosition.y;
+				dir = LEFT;
+			}
+			else {
+				id = turn.playerPosition.y;
+				dir = RIGHT;
 			}
 		}
 		else {
-			// Select the item we want to reach
-			int currentItem = 0;
-			for (int i = 0; i < turn.numItems; i++) {
-				if (strncmp(turn.items[i].name, turn.quests[0].name, 11) == 0) {
-					currentItem = i;
-					break;
-				}
-			}
-
-			int moveDirectionX = turn.playerPosition.x - turn.items[currentItem].x;
-			int moveDirectionY = turn.playerPosition.y - turn.items[currentItem].y;
-
-			fprintf(stderr, "DX: %d, DY: %d\n", moveDirectionX, moveDirectionY);
-
-			if (moveDirectionY == 0) {
-				if (turn.playerPosition.y > 3) {
-					printf("PUSH %d UP\n", turn.playerPosition.x);
-					lastPush[ID] = turn.playerPosition.x;
-					lastPush[DIRECTION] = UP;
+			if (moveDirectionX >= moveDirectionY) {
+				if (moveDirectionX < 0) {
+					id = turn.playerPosition.y;
+					dir = RIGHT;
 				}
 				else {
-					printf("PUSH %d DOWN\n", turn.playerPosition.x);
-					lastPush[ID] = turn.playerPosition.x;
-					lastPush[DIRECTION] = DOWN;
-				}
-			}
-			else if (moveDirectionX == 0){
-				if (turn.playerPosition.x > 3) {
-					printf("PUSH %d LEFT\n", turn.playerPosition.y);
-					lastPush[ID] = turn.playerPosition.y;
-					lastPush[DIRECTION] = LEFT;
-				}
-				else {
-					printf("PUSH %d RIGHT\n", turn.playerPosition.y);
-					lastPush[ID] = turn.playerPosition.y;
-					lastPush[DIRECTION] = RIGHT;
+					id = turn.playerPosition.y;
+					dir = LEFT;
 				}
 			}
 			else {
-				if (moveDirectionX >= moveDirectionY) {
-					if (moveDirectionX < 0) {
-						printf("PUSH %d RIGHT\n", turn.playerPosition.y);
-						lastPush[ID] = turn.playerPosition.y;
-						lastPush[DIRECTION] = RIGHT;
-					}
-					else {
-						printf("PUSH %d LEFT\n", turn.playerPosition.y);
-						lastPush[ID] = turn.playerPosition.y;
-						lastPush[DIRECTION] = LEFT;
-					}
+				if (moveDirectionY < 0) {
+					id = turn.playerPosition.x;
+					dir = DOWN;
 				}
 				else {
-					if (moveDirectionY < 0) {
-						printf("PUSH %d DOWN\n", turn.playerPosition.x);
-						lastPush[ID] = turn.playerPosition.x;
-						lastPush[DIRECTION] = DOWN;
-					}
-					else {
-						printf("PUSH %d UP\n", turn.playerPosition.x);
-						lastPush[ID] = turn.playerPosition.x;
-						lastPush[DIRECTION] = UP;
-					}
+					id = turn.playerPosition.x;
+					dir = UP;
 				}
 			}
 		}
-	}
+
+		// Count number of same PUSH
+		if (lastPush[ID] == id && lastPush[DIRECTION] == dir) {
+			numberOfSamePush++;
+		}
+		else {
+			lastPush[ID] = id;
+			lastPush[DIRECTION] = dir;
+			numberOfSamePush = 0;
+		}
+
+		switch (dir) {
+			case UP   : printf("PUSH %d UP\n", id); break;
+			case RIGHT: printf("PUSH %d RIGHT\n", id); break;
+			case DOWN : printf("PUSH %d DOWN\n", id); break;
+			case LEFT : printf("PUSH %d LEFT\n", id); break;
+		}
+	//}
 }
 
 /***************************************************************************************************
