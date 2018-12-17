@@ -87,6 +87,12 @@ local INV_DIR = tbl.define{
     [DIR.LEFT] = DIR.RIGHT,
 }
 --p_err("INV_DIR\n"..tostring(INV_DIR))
+local DIR_SHIFT = {
+    [DIR.UP] = {x = 0, y = -1},
+    [DIR.DOWN] = {x = 0, y = 1},
+    [DIR.RIGHT] = {x = 1, y = 0},
+    [DIR.LEFT] = {x = -1, y = 0},
+}
 
 -- Parsers
 local parse
@@ -306,9 +312,135 @@ end
 
 local play
 do
+    local function closest_item(items, pos)
+        local min_dist = 98+1
+        local ret
+        for _, item in pairs(items) do
+            if item.x > 0 then
+                local dx = item.x - pos.x
+                local dy = item.y - pos.y
+                local dist = dx*dx + dy*dy
+                if dist < min_dist then
+                    ret = item
+                    min_dist = dist
+                end
+            end
+        end
+        return ret, min_dist
+    end
+
+    local function main_dir(source, dest)
+        local dx = dest.x - source.x
+        local dy = dest.y - source.y
+
+        if math.abs(dx) >= math.abs(dy) then
+            if dx > 0 then
+                return DIR.RIGHT
+            else
+                return DIR.LEFT
+            end
+        else
+            if dy > 0 then
+                return DIR.DOWN
+            else
+                return DIR.UP
+            end
+        end
+    end
+
+    local function push_front_column(me, wanted)
+        local push = {}
+        local dir = wanted.dir
+        if dir == "UP" then
+            push.index = me.y-1 -1
+            push.dir = DIR.RIGHT
+        elseif dir == "RIGHT" then
+            push.index = me.x-1 +1
+            push.dir = DIR.UP
+        elseif dir == "DOWN" then
+            push.index = me.y-1 +1
+            push.dir = DIR.RIGHT
+        else
+            push.index = me.x-1 -1
+            push.dir = DIR.UP
+        end
+        push.dir = wanted.shift_dir or push.dir
+        return push
+    end
+
+    local function position_is_legit(pos)
+        return pos.x > 0 and pos.x < 8
+            and pos.y > 0 and pos.y < 8
+    end
+
+    local function best_useful_dir(map, me, wanted_dir)
+        local best_dir = {
+            [DIR.UP] = {DIR.UP, DIR.RIGHT, DIR.LEFT, DIR.DOWN},
+            [DIR.RIGHT] = {DIR.RIGHT, DIR.DOWN, DIR.UP, DIR.LEFT},
+            [DIR.DOWN] = {DIR.DOWN, DIR.RIGHT, DIR.LEFT, DIR.UP},
+            [DIR.LEFT] = {DIR.LEFT, DIR.DOWN, DIR.UP, DIR.RIGHT},
+        }
+        local tile = map[me.y][me.x]
+        for _, dir in ipairs(best_dir[wanted_dir]) do
+            if tile.half_dir[dir] then
+                local front_pos = {
+                    y = me.y+DIR_SHIFT[dir].y,
+                    x = me.x+DIR_SHIFT[dir].x,
+                    liberty = me.x ~= 0 and "x" or "y",
+                }
+                local shift_dir
+                local pos = tbl.copy(front_pos)
+                pos[pos.liberty] = pos[pos.liberty] + 1
+                if position_is_legit(pos) and map[pos.y][pos.x].half_dir[INV_DIR[dir]] then
+                    shift_dir = dir
+                end
+                pos = tbl.copy(front_pos)
+                pos[pos.liberty] = pos[pos.liberty] - 1
+                if position_is_legit(pos) and map[pos.y][pos.x].half_dir[INV_DIR[dir]] then
+                    shift_dir = dir
+                end
+                if shift_dir then
+                    if dir == DIR.UP and me.y > 1
+                        or dir == DIR.DOWN and me.y < 7
+                        or dir == DIR.LEFT and me.x > 1
+                        or dir == DIR.RIGHT and me.x < 7
+                        then
+                        return {
+                            dir = dir,
+                            shift_dir = shift_dir,
+                        }
+                    end
+                end
+            end
+        end
+        -- TODO Probably suboptimal. We should bother the ennemi instead
+        return {
+            dir = wanted_dir,
+        }
+    end
+
+    local function random_push()
+        return {
+            index = math.random(0, 7),
+            dir = DIR[math.random(1, 4)],
+        }
+    end
+
     local function play_push(world)
-        -- TODO Careful of the index shift (PUSH 3 <=> map[4])
-        print("PUSH 3 RIGHT")
+        local me = world.players.me
+        local target = closest_item(world.items[0], me)
+        local push
+
+        if target then
+            local wanted_dir = main_dir(me, target)
+            local dir = best_useful_dir(world.map, me, wanted_dir)
+
+            push = push_front_column(me, dir)
+        else
+            push = random_push()
+        end
+
+        print("PUSH "..push.index.." "..push.dir)
     end
 
     local function calc_distance(p1, p2)
@@ -332,16 +464,8 @@ do
 
         local best_position
         local function position_value(pos)
-            local min_dist = 98+1
-            for _, item in pairs(me_items) do
-                local dx = item.x - pos.x
-                local dy = item.y - pos.y
-                local dist = dx*dx + dy*dy
-                if dist < min_dist then
-                    min_dist = dist
-                end
-            end
-            return 100-min_dist
+            local res, min_dist = closest_item(me_items, pos)
+            return res and 100-min_dist or 0
         end
         local function evaluate_position(pos, path)
             local pos_value = position_value(pos)
@@ -397,7 +521,7 @@ do
                 end
             end
             heads = new_heads
-            p_err("heads:"..#heads)
+            --p_err("heads:"..#heads)
         end
 
         if best_position then
@@ -424,7 +548,7 @@ do
 
             -- Call the move calculator only if necessary
             if not done then
-                path = closest_accessible_item_path(world.map, path.target)
+                path = closest_accessible_item_path(world.map, world.items[0], path.target)
             else
                 path = nil
             end
