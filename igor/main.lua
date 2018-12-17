@@ -317,7 +317,7 @@ do
         return dx*dx + dy*dy
     end
 
-    local function closest_accessible_item_path(map, start_pos)
+    local function closest_accessible_item_path(map, me_items, start_pos)
         local known_tile = {}
         local function add_known_tile(pos)
             if pos.x < 1 or pos.y < 1 or pos.x > 7 or pos.y > 7 then return false end
@@ -327,6 +327,30 @@ do
             else
                 known_tile[pos_name] = true
                 return true
+            end
+        end
+
+        local best_position
+        local function position_value(pos)
+            local min_dist = 98+1
+            for _, item in pairs(me_items) do
+                local dx = item.x - pos.x
+                local dy = item.y - pos.y
+                local dist = dx*dx + dy*dy
+                if dist < min_dist then
+                    min_dist = dist
+                end
+            end
+            return 100-min_dist
+        end
+        local function evaluate_position(pos, path)
+            local pos_value = position_value(pos)
+            if not best_position or pos_value > best_position.value then
+                best_position = {
+                    path = path,
+                    target = pos,
+                    value = pos_value,
+                }
             end
         end
 
@@ -365,6 +389,9 @@ do
                             table.insert(new_heads, tbl.hash_merge(tgt_pos, {
                                 path = path,
                             }))
+
+                            -- Evaluate tile value
+                            evaluate_position(tgt_pos, path)
                         end
                     end
                 end
@@ -372,6 +399,13 @@ do
             heads = new_heads
             p_err("heads:"..#heads)
         end
+
+        if best_position then
+            local path = best_position.path
+            path.target = best_position.target
+            return path, true
+        end
+
         return false
     end
 
@@ -379,7 +413,7 @@ do
         local moves = {}
 
         -- Accessible items
-        local path = closest_accessible_item_path(world.map, world.players.me)
+        local path, done = closest_accessible_item_path(world.map, world.items[0], world.players.me)
         while path do
             if #path + #moves > 20 then break end
 
@@ -387,10 +421,14 @@ do
                 table.insert(moves, move)
             end
             world.map[path.target.y][path.target.x].item = nil
-            path = closest_accessible_item_path(world.map, path.target)
-        end
 
-        -- TODO Get closer to the next target
+            -- Call the move calculator only if necessary
+            if not done then
+                path = closest_accessible_item_path(world.map, path.target)
+            else
+                path = nil
+            end
+        end
 
         if #moves > 0 then
             print("MOVE "..table.concat(moves, " "))
